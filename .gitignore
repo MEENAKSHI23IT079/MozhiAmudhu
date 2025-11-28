@@ -1,0 +1,19 @@
+# Ignore full assets and models (VERY IMPORTANT)
+assets/
+models/
+
+# Python cache + venv
+__pycache__/
+venv/
+env/
+ENV/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit
+.streamlit/
