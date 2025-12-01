@@ -1,101 +1,136 @@
-"""PDF Reader Module
+"""
+PDF Reader Module with Circular Classification
 
-Responsible for extracting text from uploaded PDF files using pdfplumber.
-Supports multi-page PDFs and handles various PDF formats.
+Extracts text from uploaded PDF files using pdfplumber
+and includes a heuristic classifier to detect whether
+the document is a Government Circular or a general PDF.
 """
 
 import pdfplumber
-from typing import Union
+from typing import Union, Tuple, Dict
 import io
 
 
+# -------------------------------------------------------------------
+# 🔍 1. Government Circular Detector (Heuristic Rule-based)
+# -------------------------------------------------------------------
+
+def detect_government_circular(text: str) -> Dict:
+    """
+    Detect whether the given text looks like a Government Circular.
+
+    Returns dict with:
+        - is_circular: bool
+        - confidence: float (0–1)
+        - reason: explanation
+    """
+
+    if not text or len(text.strip()) == 0:
+        return {
+            "is_circular": False,
+            "confidence": 0.0,
+            "reason": "The document contains no readable text."
+        }
+
+    # Convert to lowercase for easy matching
+    t = text.lower()
+
+    # Common circular keywords
+    gov_keywords = [
+        "government of", "govt. of", "g.o.", "department of",
+        "ministry of", "secretariat", "circular", "proceedings",
+        "office order", "official memorandum", "directorate",
+        "education department", "school education", "revenue department",
+        "public notice", "administrative"
+    ]
+
+    # Points system
+    score = 0
+    max_score = len(gov_keywords)
+
+    for word in gov_keywords:
+        if word in t:
+            score += 1
+
+    confidence = round(score / max_score, 2)
+
+    # Classification threshold
+    is_circular = confidence >= 0.20  # at least 20% matching
+
+    reason = (
+        f"Matched {score} keywords out of {max_score}. "
+        f"Confidence: {confidence}"
+    )
+
+    return {
+        "is_circular": is_circular,
+        "confidence": confidence,
+        "reason": reason
+    }
+
+
+# -------------------------------------------------------------------
+# 📄 2. Extract Text (Normal)
+# -------------------------------------------------------------------
+
 def extract_text(pdf_file_path: Union[str, io.BytesIO]) -> str:
     """
-    Extract text from a PDF file using pdfplumber.
-    
-    Args:
-        pdf_file_path: Path to PDF file (str) or file-like object (BytesIO)
-        
-    Returns:
-        str: Extracted plain text from all pages of the PDF
-        
-    Raises:
-        FileNotFoundError: If the PDF file doesn't exist
-        Exception: If PDF cannot be read or processed
-        
-    Example:
-        >>> text = extract_text('document.pdf')
-        >>> print(text[:100])  # First 100 characters
+    Extract plain text from PDF using pdfplumber.
     """
     try:
-        # Open PDF with pdfplumber
         with pdfplumber.open(pdf_file_path) as pdf:
-            # Extract text from all pages
             extracted_text = []
-            
+
             for page_num, page in enumerate(pdf.pages, start=1):
-                # Extract text from current page
                 page_text = page.extract_text()
-                
+
                 if page_text:
-                    # Add page text with optional page separator
                     extracted_text.append(page_text.strip())
                 else:
-                    # Handle empty pages
-                    print(f"Warning: Page {page_num} is empty or text could not be extracted")
-            
-            # Combine all pages with double newline separator
-            full_text = "\n\n".join(extracted_text)
-            
-            # Return cleaned text
-            return full_text.strip()
-            
+                    print(f"Warning: Page {page_num} is empty or unreadable.")
+
+            return "\n\n".join(extracted_text).strip()
+
     except FileNotFoundError:
         raise FileNotFoundError(f"PDF file not found: {pdf_file_path}")
     except Exception as e:
         raise Exception(f"Error extracting text from PDF: {str(e)}")
 
 
+# -------------------------------------------------------------------
+# 📄 3. Extract Text with Layout
+# -------------------------------------------------------------------
+
 def extract_text_with_layout(pdf_file_path: Union[str, io.BytesIO]) -> str:
     """
-    Extract text from PDF while attempting to preserve layout.
-    
-    Args:
-        pdf_file_path: Path to PDF file (str) or file-like object (BytesIO)
-        
-    Returns:
-        str: Extracted text with layout preservation
+    Extracts text while attempting to preserve layout.
     """
     try:
         with pdfplumber.open(pdf_file_path) as pdf:
             extracted_text = []
-            
+
             for page in pdf.pages:
-                # Extract text with layout settings
                 page_text = page.extract_text(
                     layout=True,
                     x_tolerance=3,
                     y_tolerance=3
                 )
-                
                 if page_text:
                     extracted_text.append(page_text.strip())
-            
+
             return "\n\n".join(extracted_text).strip()
-            
+
     except Exception as e:
         raise Exception(f"Error extracting text with layout: {str(e)}")
 
 
+# -------------------------------------------------------------------
+# 📄 4. PDF Info
+# -------------------------------------------------------------------
+
 def get_pdf_info(pdf_file_path: Union[str, io.BytesIO]) -> dict:
     """
-    Get metadata information about the PDF.
-    
-    Args:
-        pdf_file_path: Path to PDF file (str) or file-like object (BytesIO)
-        
-    Returns:
-        dict: PDF metadata including page count, title, author, etc.
+    Returns metadata and page count of the PDF.
     """
     try:
         with pdfplumber.open(pdf_file_path) as pdf:
@@ -104,28 +139,33 @@ def get_pdf_info(pdf_file_path: Union[str, io.BytesIO]) -> dict:
                 'metadata': pdf.metadata if pdf.metadata else {},
             }
             return info
+
     except Exception as e:
         raise Exception(f"Error getting PDF info: {str(e)}")
 
 
+# -------------------------------------------------------------------
+# 🧪 5. Test (Command Line)
+# -------------------------------------------------------------------
+
 if __name__ == "__main__":
-    # Test the module
     import sys
-    
+
     if len(sys.argv) > 1:
         test_pdf = sys.argv[1]
-        print(f"Testing PDF extraction on: {test_pdf}")
+        print(f"Testing PDF: {test_pdf}")
         print("=" * 50)
-        
-        # Get PDF info
+
         info = get_pdf_info(test_pdf)
         print(f"Pages: {info['page_count']}")
         print(f"Metadata: {info['metadata']}")
         print("=" * 50)
-        
-        # Extract text
+
         text = extract_text(test_pdf)
-        print(f"\nExtracted {len(text)} characters")
-        print(f"\nFirst 500 characters:\n{text[:500]}")
+        print(f"Extracted {len(text)} characters\n")
+
+        print("Detecting Circular...")
+        print(detect_government_circular(text))
+
     else:
-        print("Usage: python pdf_reader.py <path_to_pdf>")
+        print("Usage: python pdf_reader.py <file.pdf>")

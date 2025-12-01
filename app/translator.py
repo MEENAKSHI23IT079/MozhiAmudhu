@@ -22,6 +22,7 @@ INDIAN_LANG_CODES = {
     "asm_Beng": 256015,   # Assamese
     "ori_Orya": 256136,   # Odia
     "urd_Arab": 256190,   # Urdu
+    "eng_Latn": 256047,
 }
 
 class NLLBTranslator:
